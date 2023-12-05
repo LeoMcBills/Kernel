@@ -1,13 +1,49 @@
 #include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #define EXIT_SUCCESS 0
+#define LSH_RL_BUFSIZE 1024
+// Parsing the line
+#define LSH_TOK_BUFSIZE 64
+#define LSH_TOK_DELIM " \t\r\n\a"
+int lsh_cd(char **args);
+int lsh_help(char **args);
+int lsh_exit(char **args);
+void lsh_loop(void);
+char *lsh_read_line(void);
+char **lsh_split_line(char *line);
+int lsh_launch(char **args);
+int lsh_execute(char **args);
+int lsh_exit(char **args);
+int lsh_help(char **args);
+
+char *builtin_str[] = {
+    "cd",
+    "help",
+    "exit"
+};
+
+int (*builtin_func[]) (char **) = {
+    &lsh_cd,
+    &lsh_help,
+    &lsh_exit
+};
+
+int lsh_num_builtins() {
+    return sizeof(builtin_str) / sizeof(char *);
+}
+
 
 int main(int argc, char **argv)
 {
     // Load config files, if any of them.
 
     // Run command loop.
-    //lsh_loop();
+    lsh_loop();
 
     // Perform any shutdown/cleanup.
 
@@ -31,7 +67,6 @@ void lsh_loop(void)
     } while (status);
 }
 
-# define LSH_RL_BUFSIZE 1024
 char *lsh_read_line(void)
 {
     int bufsize = LSH_RL_BUFSIZE;
@@ -40,7 +75,7 @@ char *lsh_read_line(void)
     int c;
 
     if (!buffer) {
-        fprint(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "lsh: allocation error\n");
         exit(EXIT_FAILURE);
     }
 
@@ -62,16 +97,13 @@ char *lsh_read_line(void)
             bufsize += LSH_RL_BUFSIZE;
             buffer = realloc(buffer, bufsize);
             if (!buffer) {
-                fprint(stderr, "lsh: allocation error\n");
+                fprintf(stderr, "lsh: allocation error\n");
                 exit(EXIT_FAILURE);
             }
         }
     }
 }
 
-// Parsing the line
-# define LSH_TOK_BUFSIZE 64
-# define LSH_TOK_DELIM " \t\r\n\a"
 char **lsh_split_line(char *line)
 {
     int bufsize = LSH_TOK_BUFSIZE, position = 0;
@@ -79,7 +111,7 @@ char **lsh_split_line(char *line)
     char *token;
 
     if (!tokens) {
-        fprint(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "lsh: allocation error\n");
         exit(EXIT_FAILURE);
     }
 
@@ -92,7 +124,7 @@ char **lsh_split_line(char *line)
             bufsize += LSH_TOK_BUFSIZE;
             tokens = realloc(tokens, bufsize * sizeof(char*));
             if (!tokens) {
-                fprint(stderr, "lsh: allocatione error\n");
+                fprintf(stderr, "lsh: allocatione error\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -125,4 +157,53 @@ int lsh_launch(char **args)
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
     return 1;
+}
+
+int lsh_cd(char **args)
+{
+    if (args[1] == NULL) {
+        fprintf(stderr, "lsh: expected argument to \"cd\"\n");
+    } else {
+        if (chdir(args[1]) != 0) {
+            perror("lsh");
+        }
+    }
+    return 1;
+}
+
+int lsh_help(char **args)
+{
+    int i;
+    printf("Leo Kinyera's LSH\n");
+    printf("Type program names and arguments, and hit enter.\n");
+    printf("The following are built in:\n");
+
+    for (i = 0; i < lsh_num_builtins(); i++) {
+        printf("   %s\n", builtin_str[i]);
+    }
+
+    printf("Use the man command for information on other programs.\n");
+    return 1;
+}
+
+int lsh_exit(char **args)
+{
+    return 0;
+}
+
+int lsh_execute(char **args)
+{
+    int i;
+
+    if (args[0] == NULL) {
+        // An empty command was entered.
+        return 1;
+    }
+
+    for (i = 0; i < lsh_num_builtins(); i++) {
+        if (strcmp(args[0], builtin_str[i]) == 0) {
+            return (*builtin_func[i])(args);
+        }
+    }
+    return lsh_launch(args);
 }
