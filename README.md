@@ -1,1 +1,1 @@
-# C shell
+# Simple C shell
